@@ -13,8 +13,11 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       // Show a loading notification or toast here (simplified for this example)
       console.log("Analyzing image...", imageUrl);
 
+      const { apiBaseUrl } = await chrome.storage.sync.get(['apiBaseUrl']);
+      const baseUrl = apiBaseUrl || 'http://localhost:8000';
+
       // Call our FastAPI backend
-      const apiResponse = await fetch("http://localhost:8000/predict/image", {
+      const apiResponse = await fetch(`${baseUrl}/predict/image`, {
         method: "POST",
         body: formData,
       });

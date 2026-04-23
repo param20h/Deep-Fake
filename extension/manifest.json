@@ -6,7 +6,8 @@
   "permissions": [
     "contextMenus",
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"
@@ -24,6 +25,7 @@
   ],
   "host_permissions": [
     "<all_urls>",
-    "http://localhost:8000/*"
+    "http://*/*",
+    "https://*/*"
   ]
 }
