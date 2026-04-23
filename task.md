@@ -1,0 +1,7 @@
+- [ ] Initialize Next.js frontend project
+- [ ] Initialize FastAPI backend project
+- [ ] Initialize Chrome extension project
+- [ ] Implement FastAPI backend (with mocked model for now)
+- [ ] Implement Next.js frontend (UI & API integration)
+- [ ] Implement Chrome extension
+- [ ] Perform end-to-end testing
