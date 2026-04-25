@@ -1,0 +1,349 @@
+.hero {
+  padding: 1.5rem 0;
+}
+
+.kicker {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  margin-bottom: 0.9rem;
+  border: 1px solid rgba(70, 212, 255, 0.4);
+  background: rgba(70, 212, 255, 0.13);
+  color: #7ee6ff;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+}
+
+.hero h1 {
+  margin: 0;
+  max-width: 900px;
+  font-size: clamp(2.2rem, 4.8vw, 4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.03;
+}
+
+.hero h1 span {
+  color: #7ce2ff;
+}
+
+.subtitle {
+  margin-top: 1.1rem;
+  max-width: 760px;
+  color: var(--text-soft);
+  font-size: clamp(1rem, 2vw, 1.16rem);
+  line-height: 1.6;
+}
+
+.metricRow {
+  margin-top: 1.4rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.metric {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.metric span {
+  display: block;
+  color: #91a7ce;
+  font-size: 0.76rem;
+  margin-bottom: 0.35rem;
+}
+
+.metric strong {
+  font-size: 0.93rem;
+  word-break: break-word;
+}
+
+.workspace {
+  margin-top: 1.1rem;
+  padding: 1rem;
+}
+
+.workspaceHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.workspaceHeader h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.statusDot {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  color: #caf3ff;
+}
+
+.dropzone {
+  border-radius: 16px;
+  border: 1px dashed rgba(124, 226, 255, 0.42);
+  min-height: 280px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  background: linear-gradient(180deg, rgba(28, 51, 97, 0.4), rgba(13, 23, 45, 0.4));
+  transition: transform 180ms ease, border-color 180ms ease;
+}
+
+.dropzone:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 90, 103, 0.72);
+}
+
+.dropIcon {
+  margin: 0 auto;
+  width: 2.6rem;
+  height: 2.6rem;
+  display: grid;
+  place-content: center;
+  border-radius: 999px;
+  background: rgba(255, 90, 103, 0.16);
+  border: 1px solid rgba(255, 90, 103, 0.38);
+  color: #ff7f89;
+  font-family: var(--font-mono), monospace;
+}
+
+.dropzone h3 {
+  margin: 0;
+  font-size: 1.22rem;
+}
+
+.dropzone p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.loadedState {
+  display: grid;
+  gap: 1rem;
+}
+
+.fileRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.fileRow h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.fileRow p {
+  margin: 0.3rem 0 0;
+  color: var(--text-soft);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.82rem;
+}
+
+.ghostBtn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #dce8ff;
+  padding: 0.55rem 0.85rem;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.previewBox {
+  border-radius: 14px;
+  overflow: hidden;
+  background: #02040e;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.previewMedia {
+  width: 100%;
+  max-height: 380px;
+  object-fit: contain;
+  display: block;
+}
+
+.primaryBtn {
+  border: none;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(90deg, #ff5a67, #ff8454);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(255, 90, 103, 0.3);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.errorText {
+  margin: 0;
+  color: #ffb2b8;
+}
+
+.resultCard {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--surface-strong);
+  padding: 0.95rem;
+}
+
+.resultHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.resultHead h3 {
+  margin: 0;
+}
+
+.verdict {
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-family: var(--font-mono), monospace;
+  padding: 0.33rem 0.68rem;
+  border: 1px solid transparent;
+}
+
+.fake {
+  color: #ffc9ce;
+  border-color: rgba(255, 90, 103, 0.4);
+  background: rgba(255, 90, 103, 0.16);
+}
+
+.real {
+  color: #b8ffdf;
+  border-color: rgba(31, 207, 143, 0.42);
+  background: rgba(31, 207, 143, 0.16);
+}
+
+.progressWrap {
+  margin-top: 0.8rem;
+}
+
+.progressMeta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  color: #bed2fa;
+}
+
+.progressMeta strong {
+  color: #fff;
+}
+
+.track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  height: 12px;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 550ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fillFake {
+  background: linear-gradient(90deg, #ff7386, #ff4f60);
+}
+
+.fillReal {
+  background: linear-gradient(90deg, #26d49a, #16ad8f);
+}
+
+.resultNote {
+  margin-top: 0.8rem;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.footer {
+  margin-top: 1.2rem;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.footerBrand {
+  margin: 0;
+  font-family: var(--font-mono), monospace;
+  color: #e9f3ff;
+  letter-spacing: 0.04em;
+}
+
+.footerCopy {
+  margin: 0.35rem 0 0;
+  color: var(--text-soft);
+}
+
+.footerLink {
+  border-radius: 999px;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid rgba(124, 226, 255, 0.35);
+  background: rgba(124, 226, 255, 0.12);
+  color: #d8f8ff;
+  font-weight: 600;
+}
+
+@media (max-width: 880px) {
+  .metricRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace {
+    padding: 0.8rem;
+  }
+
+  .fileRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .resultHead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
