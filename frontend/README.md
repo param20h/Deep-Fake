@@ -12,7 +12,7 @@ pip install -r requirements.txt
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Note: this mocked backend path supports Python 3.14+. For full ML inference (`requirements-ml.txt`)
+Note: this mocked backend path supports Python 3.14+. For full ML inference (`requirements-ml.txt`), use Python 3.11 or 3.12.
 
 If you want to run real model inference later (instead of the current mocked scoring), install optional ML deps too:
 
