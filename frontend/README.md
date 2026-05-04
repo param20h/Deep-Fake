@@ -1,2 +1,2 @@
 #deep fake 
-FInding a way out
+Finding a way out
