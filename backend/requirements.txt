@@ -8,3 +8,4 @@ torchvision==0.17.2
 facenet-pytorch==2.5.3
 opencv-python-headless==4.9.0.80
 Pillow==9.5.0
+numpy<2.0.0
