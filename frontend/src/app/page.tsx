@@ -48,7 +48,9 @@ export default function Home() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const endpoint = '/api/predict';
+    const endpoint = file.type.startsWith('video/') 
+      ? `${API_BASE_URL}/predict/video`
+      : `${API_BASE_URL}/predict/image`;
 
     try {
       const response = await fetch(endpoint, {
