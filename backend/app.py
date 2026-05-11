@@ -10,12 +10,17 @@ import io
 
 try:
     import torch
+    import torch.nn as nn
     from PIL import Image
-    from torchvision import transforms
+    from torchvision import transforms, models
+    from facenet_pytorch import MTCNN
 except Exception:
     torch = None
+    nn = None
     Image = None
     transforms = None
+    models = None
+    MTCNN = None
 
 try:
     import cv2
@@ -54,12 +59,14 @@ model_device: str = "cpu"
 model_error: Optional[str] = None
 
 
+mtcnn = None
+
 def _try_load_model() -> None:
-    global model, model_device, model_error
+    global model, model_device, model_error, mtcnn
     model_error = None
 
-    if torch is None or Image is None or transforms is None:
-        model_error = "PyTorch/Pillow/torchvision not available."
+    if torch is None or Image is None or transforms is None or models is None or MTCNN is None:
+        model_error = "PyTorch/Pillow/torchvision/MTCNN not available."
         return
 
     if not os.path.exists(MODEL_CHECKPOINT_PATH):
@@ -68,20 +75,29 @@ def _try_load_model() -> None:
 
     try:
         model_device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        base_model = models.efficientnet_b4(weights=None)
+        num_ftrs = base_model.classifier[1].in_features
+        base_model.classifier = nn.Sequential(
+            nn.Dropout(p=0.4, inplace=True),
+            nn.Linear(num_ftrs, 1)
+        )
+        
         loaded = torch.load(MODEL_CHECKPOINT_PATH, map_location=model_device)
-        model_obj = loaded.get("model") if isinstance(loaded, dict) and "model" in loaded else loaded
-        if not hasattr(model_obj, "eval"):
-            raise ValueError("Checkpoint did not contain a valid torch model object.")
-
-        model_obj.eval()
-        model = model_obj.to(model_device)
+        state_dict = loaded.get("model") if isinstance(loaded, dict) and "model" in loaded else loaded
+        base_model.load_state_dict(state_dict)
+        base_model.eval()
+        
+        model = base_model.to(model_device)
+        mtcnn = MTCNN(margin=20, keep_all=False, select_largest=True, post_process=False, device=model_device)
     except Exception as exc:
         model = None
+        mtcnn = None
         model_error = f"Failed to load model: {exc}"
 
 
 def _has_model_inference() -> bool:
-    return model is not None and torch is not None and Image is not None and transforms is not None
+    return model is not None and mtcnn is not None
 
 
 def _image_transform() -> "transforms.Compose":
@@ -108,8 +124,15 @@ def _predict_image_with_model(contents: bytes) -> float:
         raise RuntimeError("Model inference is not available.")
 
     image = Image.open(io.BytesIO(contents)).convert("RGB")
+    
+    face = mtcnn(image)
+    if face is None:
+        raise ValueError("No face detected in the image.")
+        
+    face_tensor = face / 255.0
+    face_img = transforms.ToPILImage()(face_tensor)
+    tensor = _image_transform()(face_img).unsqueeze(0).to(model_device)
 
-    tensor = _image_transform()(image).unsqueeze(0).to(model_device)
     with torch.no_grad():
         output = model(tensor)
     return _bounded_score(_output_to_fake_probability(output))
@@ -149,20 +172,31 @@ def _predict_video_with_model(contents: bytes) -> float:
     if not _has_model_inference():
         raise RuntimeError("Model inference is not available.")
 
-    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=True) as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         tmp.write(contents)
-        tmp.flush()
-        frames = _sample_video_frames(tmp.name, VIDEO_SAMPLE_FRAMES)
+        tmp_path = tmp.name
 
-    probs = []
-    transform = _image_transform()
-    with torch.no_grad():
+    try:
+        frames = _sample_video_frames(tmp_path, VIDEO_SAMPLE_FRAMES)
+        scores = []
         for frame in frames:
-            tensor = transform(frame).unsqueeze(0).to(model_device)
-            output = model(tensor)
-            probs.append(_output_to_fake_probability(output))
-
-    return _bounded_score(sum(probs) / len(probs))
+            face = mtcnn(frame)
+            if face is None:
+                continue
+            face_tensor = face / 255.0
+            face_img = transforms.ToPILImage()(face_tensor)
+            tensor = _image_transform()(face_img).unsqueeze(0).to(model_device)
+            with torch.no_grad():
+                output = model(tensor)
+            scores.append(_bounded_score(_output_to_fake_probability(output)))
+            
+        if not scores:
+            raise ValueError("No face detected in any sampled frame.")
+            
+        return sum(scores) / len(scores)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 def _bounded_score(raw_score: float) -> float:
