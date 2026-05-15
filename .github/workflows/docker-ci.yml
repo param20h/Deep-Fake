@@ -1,0 +1,30 @@
+name: Backend Docker CI
+
+on:
+  push:
+    branches: [ "main" ]
+    # Only trigger the Docker build if files in the backend folder actually changed
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'backend/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        lfs: true # Crucial: Downloads the 70MB deepfake_model.pt file from Git LFS
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build the FastAPI Docker image
+      run: |
+        cd backend
+        docker build -t deepfake-api:test-$(date +%s) .
