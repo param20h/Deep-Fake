@@ -6,10 +6,12 @@ on:
     # Only trigger the Docker build if files in the backend folder actually changed
     paths:
       - 'backend/**'
+      - '.github/workflows/docker-ci.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'backend/**'
+      - '.github/workflows/docker-ci.yml'
 
 jobs:
   build:
