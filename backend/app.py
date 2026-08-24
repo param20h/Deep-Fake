@@ -14,6 +14,7 @@ try:
     from PIL import Image
     from torchvision import transforms, models
     from facenet_pytorch import MTCNN
+    import timm
 except Exception:
     torch = None
     nn = None
@@ -21,6 +22,7 @@ except Exception:
     transforms = None
     models = None
     MTCNN = None
+    timm = None
 
 try:
     import cv2
@@ -76,12 +78,10 @@ def _try_load_model() -> None:
     try:
         model_device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        base_model = models.efficientnet_b4(weights=None)
-        num_ftrs = base_model.classifier[1].in_features
-        base_model.classifier = nn.Sequential(
-            nn.Dropout(p=0.4, inplace=True),
-            nn.Linear(num_ftrs, 1)
-        )
+        base_model = timm.create_model('xception', pretrained=False, num_classes=1)
+        # Optional: add dropout if needed to match training structure
+        if hasattr(base_model, 'get_classifier'):
+            base_model.get_classifier().add_module('dropout', nn.Dropout(0.5))
         
         loaded = torch.load(MODEL_CHECKPOINT_PATH, map_location=model_device)
         state_dict = loaded.get("model") if isinstance(loaded, dict) and "model" in loaded else loaded
@@ -89,7 +89,7 @@ def _try_load_model() -> None:
         base_model.eval()
         
         model = base_model.to(model_device)
-        mtcnn = MTCNN(margin=20, keep_all=False, select_largest=True, post_process=False, device=model_device)
+        mtcnn = MTCNN(margin=40, keep_all=False, select_largest=True, post_process=False, device=model_device)
     except Exception as exc:
         model = None
         mtcnn = None
