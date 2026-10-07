@@ -369,3 +369,43 @@
     align-items: flex-start;
   }
 }
+
+.linksSection {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin: 3rem 0;
+  width: 100%;
+}
+
+.linkCard {
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+  transition: transform 200ms ease;
+}
+
+.linkCard:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.linkCard h3 {
+  margin-top: 0;
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.linkCard p {
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  margin: 0.8rem 0;
+}
+
+@media (max-width: 768px) {
+  .linksSection {
+    grid-template-columns: 1fr;
+  }
+}

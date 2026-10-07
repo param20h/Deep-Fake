@@ -269,6 +269,19 @@ export default function Home() {
         )}
       </section>
 
+      <section className={`${styles.linksSection} fade-up`}>
+        <div className={styles.linkCard}>
+          <h3>📄 Read the Research Paper</h3>
+          <p>Read our full 5-page IEEE academic paper covering the detection architecture.</p>
+          <a href="/research" className={styles.primaryBtn} style={{display: 'inline-block', marginTop: '1rem', textDecoration: 'none'}}>View Paper</a>
+        </div>
+        <div className={styles.linkCard}>
+          <h3>🧮 Technical Methodology & Formulas</h3>
+          <p>Dive into the mathematical formulas, algorithms, and models powering this system.</p>
+          <a href="/results" className={styles.ghostBtn} style={{display: 'inline-block', marginTop: '1rem', textDecoration: 'none'}}>View Results & Formulas</a>
+        </div>
+      </section>
+
       <footer className={`${styles.footer} fade-up`}>
         <div>
           <p className={styles.footerBrand}>™ 2026 DeepFake by Param20h</p>
