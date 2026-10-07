@@ -17,6 +17,7 @@ try:
     import timm
     import numpy as np
     import scipy.signal as signal
+    import moviepy.editor as mp
 except Exception:
     torch = None
     nn = None
@@ -161,7 +162,12 @@ def _predict_image_with_model(contents: bytes) -> float:
             model_scores.append(_output_to_fake_probability(output))
             
     avg_score = sum(model_scores) / len(model_scores)
-    return _bounded_score(avg_score)
+    
+    # Add Frequency Domain Analysis Penalty
+    freq_penalty = _analyze_frequency_artifacts(face_img)
+    final_score = min(0.95, avg_score + freq_penalty)
+    
+    return _bounded_score(final_score)
 
 
 def _sample_video_frames(video_path: str, sample_count: int) -> list:
@@ -192,6 +198,73 @@ def _sample_video_frames(video_path: str, sample_count: int) -> list:
     if not frames:
         raise ValueError("Failed to sample frames from video.")
     return frames
+
+
+def _analyze_frequency_artifacts(pil_img: Image.Image) -> float:
+    """
+    Analyzes the 2D FFT power spectrum for grid-like high-frequency anomalies 
+    common in GANs and upsampling algorithms.
+    Returns a fake penalty between 0.0 and 0.15.
+    """
+    if 'np' not in globals():
+        return 0.0
+    gray = pil_img.convert('L')
+    img_arr = np.array(gray)
+    
+    # Calculate 2D FFT
+    f = np.fft.fft2(img_arr)
+    fshift = np.fft.fftshift(f)
+    magnitude_spectrum = 20 * np.log(np.abs(fshift) + 1e-8)
+    
+    # Calculate energy in high frequency region vs low frequency
+    h, w = magnitude_spectrum.shape
+    cy, cx = h // 2, w // 2
+    
+    y, x = np.ogrid[-cy:h-cy, -cx:w-cx]
+    mask = x*x + y*y <= (min(h, w) * 0.25)**2
+    
+    low_freq_energy = np.sum(magnitude_spectrum[mask])
+    high_freq_energy = np.sum(magnitude_spectrum[~mask])
+    
+    if low_freq_energy == 0:
+        return 0.0
+        
+    hf_ratio = high_freq_energy / low_freq_energy
+    if hf_ratio > 3.0:
+        return 0.15
+    elif hf_ratio > 2.0:
+        return 0.05
+    return 0.0
+
+
+def _analyze_audio_visual_sync(video_path: str) -> float:
+    """
+    Basic Audio-Visual anomaly detection.
+    Checks if a talking-head video has stripped or severely distorted audio.
+    """
+    if 'mp' not in globals():
+        return 0.0
+        
+    try:
+        clip = mp.VideoFileClip(video_path)
+        if clip.audio is None:
+            # Deepfake videos often strip audio to hide artifacting.
+            return 0.05
+            
+        audio_arr = clip.audio.to_soundarray(fps=16000)
+        if audio_arr is None or len(audio_arr) == 0:
+            return 0.05
+            
+        rms_energy = np.sqrt(np.mean(audio_arr**2))
+        
+        # Anomalously low (near silent) energy might indicate a synthetic voiceover patch.
+        if rms_energy < 0.001:
+            return 0.02
+            
+        return 0.0
+    except Exception as e:
+        print(f"[AV Sync Error] {e}")
+        return 0.0
 
 
 def _analyze_rppg(video_path: str, max_frames=90) -> float:
@@ -310,15 +383,15 @@ def _predict_video_with_model(contents: bytes) -> float:
                     frame_model_scores.append(_output_to_fake_probability(output))
             
             avg_frame_score = sum(frame_model_scores) / len(frame_model_scores)
-            scores.append(_bounded_score(avg_frame_score))
+            
+            # Frequency Domain Analysis (Grid/GAN artifacts)
+            freq_penalty = _analyze_frequency_artifacts(face_img)
+            scores.append(_bounded_score(avg_frame_score + freq_penalty))
             
         if not scores:
             raise ValueError(f"No face detected in any sampled frame (Crop failures: {crop_failures}/{len(frames)}). Verify MTCNN margin=40 is not clipping out of bounds on close-ups.")
             
         # Temporal Aggregation Strategy (Mitigating False Positives):
-        # Taking the absolute 'max' frame is too sensitive and causes real videos 
-        # with motion blur or camera shake to be flagged as fake.
-        # Instead, we average the top 3 most suspicious frames.
         scores.sort()
         top_k = min(3, len(scores))
         top_scores = scores[-top_k:]
@@ -331,9 +404,13 @@ def _predict_video_with_model(contents: bytes) -> float:
         
         # Add biological signal analysis (rPPG penalty)
         rppg_penalty = _analyze_rppg(tmp_path)
-        final_score = min(0.95, spatial_score + rppg_penalty)
         
-        print(f"[Analysis] Frames: {len(frames)} | Failures: {crop_failures} | Spatial: {spatial_score:.3f} | rPPG Penalty: +{rppg_penalty:.3f} | Final: {final_score:.3f}")
+        # Add Audio-Visual sync penalty
+        av_penalty = _analyze_audio_visual_sync(tmp_path)
+        
+        final_score = min(0.95, spatial_score + rppg_penalty + av_penalty)
+        
+        print(f"[Analysis] Frames: {len(frames)} | Failures: {crop_failures} | Spatial: {spatial_score:.3f} | rPPG Penalty: +{rppg_penalty:.3f} | AV Penalty: +{av_penalty:.3f} | Final: {final_score:.3f}")
         return final_score
     finally:
         if os.path.exists(tmp_path):
