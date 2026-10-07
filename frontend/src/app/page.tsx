@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import styles from './page.module.css';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+
+type BackendStatus = 'checking' | 'sleeping' | 'waking' | 'awake';
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -13,6 +15,41 @@ export default function Home() {
   const [result, setResult] = useState<{is_fake: boolean, confidence: number} | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [serverStatus, setServerStatus] = useState<BackendStatus>('checking');
+
+  const checkServerHealth = async (isWakeUpCall = false) => {
+    try {
+      const controller = new AbortController();
+      // If passive check, wait 4s to see if sleeping. If wake up call, wait 60s for HF space to boot.
+      const timeoutId = setTimeout(() => controller.abort(), isWakeUpCall ? 60000 : 4000);
+      
+      const res = await fetch(`${API_BASE_URL}/`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (res.ok) {
+        setServerStatus('awake');
+      } else {
+        setServerStatus('sleeping');
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError' && !isWakeUpCall) {
+        setServerStatus('sleeping');
+      } else {
+        setServerStatus('sleeping');
+      }
+    }
+  };
+
+  // Run initial passive check on mount
+  useEffect(() => {
+    checkServerHealth();
+  }, []);
+
+  const handleWakeUp = () => {
+    setServerStatus('waking');
+    checkServerHealth(true);
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -45,6 +82,11 @@ export default function Home() {
     setResult(null);
     setErrorMessage(null);
 
+    // If we were sleeping or haven't checked, mark as waking/awake automatically
+    if (serverStatus !== 'awake') {
+      setServerStatus('waking');
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -65,9 +107,11 @@ export default function Home() {
 
       const data = await response.json();
       setResult(data);
+      setServerStatus('awake');
     } catch (error) {
       console.error(error);
-      setErrorMessage('Failed to analyze file. Check backend URL and ensure API is running.');
+      setErrorMessage('Failed to analyze file. The backend might still be waking up. Please try again.');
+      checkServerHealth(); // Re-check health
     } finally {
       setIsAnalyzing(false);
     }
@@ -98,8 +142,15 @@ export default function Home() {
             <strong>Realtime API</strong>
           </div>
           <div className={styles.metric}>
-            <span>System</span>
-            <strong>Connected</strong>
+            <span>Server Status</span>
+            {serverStatus === 'checking' && <strong>Checking... 🔄</strong>}
+            {serverStatus === 'sleeping' && (
+              <button className={styles.wakeBtn} onClick={handleWakeUp}>
+                Sleeping 😴 - Hi 👋 to Wake
+              </button>
+            )}
+            {serverStatus === 'waking' && <strong>Waking up... ⏳</strong>}
+            {serverStatus === 'awake' && <strong>Hi, I am on! 🟢</strong>}
           </div>
         </div>
       </section>
