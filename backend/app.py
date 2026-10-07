@@ -226,17 +226,21 @@ def _predict_video_with_model(contents: bytes) -> float:
         if not scores:
             raise ValueError(f"No face detected in any sampled frame (Crop failures: {crop_failures}/{len(frames)}). Verify MTCNN margin=40 is not clipping out of bounds on close-ups.")
             
-        # Temporal Aggregation Strategy: 
-        # Deepfake artifacts can be transient (flickering, sudden glitches).
-        # We blend the maximum frame score and the average to ensure transient glitches flag the video.
-        max_score = max(scores)
+        # Temporal Aggregation Strategy (Mitigating False Positives):
+        # Taking the absolute 'max' frame is too sensitive and causes real videos 
+        # with motion blur or camera shake to be flagged as fake.
+        # Instead, we average the top 3 most suspicious frames.
+        scores.sort()
+        top_k = min(3, len(scores))
+        top_scores = scores[-top_k:]
+        
+        top_avg = sum(top_scores) / top_k
         avg_score = sum(scores) / len(scores)
         
-        # 70% weight to the max frame (if one frame is definitively fake, the video is fake)
-        # 30% weight to the average (retains temporal consistency context)
-        final_score = (0.7 * max_score) + (0.3 * avg_score)
+        # Blend the top-3 average with the overall average
+        final_score = (0.5 * top_avg) + (0.5 * avg_score)
         
-        print(f"[Temporal Aggregation] Frames: {len(frames)} | Failures: {crop_failures} | Max: {max_score:.3f} | Avg: {avg_score:.3f} | Final: {final_score:.3f}")
+        print(f"[Temporal Aggregation] Frames: {len(frames)} | Failures: {crop_failures} | Top-3 Avg: {top_avg:.3f} | Total Avg: {avg_score:.3f} | Final: {final_score:.3f}")
         return final_score
     finally:
         if os.path.exists(tmp_path):
