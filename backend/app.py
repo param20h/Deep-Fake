@@ -15,6 +15,8 @@ try:
     from torchvision import transforms, models
     from facenet_pytorch import MTCNN
     import timm
+    import numpy as np
+    import scipy.signal as signal
 except Exception:
     torch = None
     nn = None
@@ -192,6 +194,93 @@ def _sample_video_frames(video_path: str, sample_count: int) -> list:
     return frames
 
 
+def _analyze_rppg(video_path: str, max_frames=90) -> float:
+    """
+    Extracts rPPG (Remote Photoplethysmography) heartbeat signal from forehead ROI.
+    Returns a 'fake penalty' between 0.0 (real heartbeat) and 0.2 (no heartbeat).
+    """
+    if cv2 is None or 'signal' not in globals():
+        return 0.0
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return 0.0
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 30.0
+
+    frames_processed = 0
+    green_signal = []
+    
+    # Try to find a face in the first few frames to establish a tracking ROI
+    roi_box = None
+    
+    while frames_processed < max_frames:
+        ret, frame = cap.read()
+        if not ret:
+            break
+            
+        if roi_box is None and frames_processed < 5:
+            # Use MTCNN on a downscaled frame for speed
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(rgb)
+            boxes, _ = mtcnn.detect(pil_img)
+            if boxes is not None and len(boxes) > 0:
+                x1, y1, x2, y2 = map(int, boxes[0])
+                # Forehead ROI: top 20% of the bounding box
+                h, w = y2 - y1, x2 - x1
+                roi_box = (x1, y1, x1 + w, y1 + int(h * 0.2))
+        
+        if roi_box is not None:
+            x1, y1, x2, y2 = roi_box
+            # Ensure within bounds
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
+            if y2 > y1 and x2 > x1:
+                roi = frame[y1:y2, x1:x2]
+                # Average green channel intensity
+                g_mean = np.mean(roi[:, :, 1])
+                green_signal.append(g_mean)
+                
+        frames_processed += 1
+        
+    cap.release()
+
+    if len(green_signal) < 30:
+        return 0.0 # Not enough frames for FFT
+
+    # Signal processing
+    signal_arr = np.array(green_signal)
+    signal_arr = signal.detrend(signal_arr)
+    
+    # Bandpass filter for normal human heart rate (0.7 Hz to 2.5 Hz -> 42 to 150 BPM)
+    nyquist = 0.5 * fps
+    low = 0.7 / nyquist
+    high = 2.5 / nyquist
+    b, a = signal.butter(3, [low, high], btype='band')
+    filtered = signal.filtfilt(b, a, signal_arr)
+    
+    # FFT to find frequency peaks
+    fft_vals = np.abs(np.fft.rfft(filtered))
+    if np.sum(fft_vals) == 0:
+        return 0.1
+        
+    # Calculate Signal-to-Noise Ratio (SNR) in the HR band
+    peak_energy = np.max(fft_vals) ** 2
+    total_energy = np.sum(fft_vals ** 2)
+    snr = peak_energy / (total_energy - peak_energy + 1e-6)
+    
+    print(f"[rPPG Analysis] Extracted SNR: {snr:.3f}")
+    
+    # If SNR is low, the pulse is chaotic/synthetic. Apply a penalty.
+    if snr < 1.5:
+        return 0.15
+    elif snr < 2.5:
+        return 0.05
+    return 0.0
+
+
 def _predict_video_with_model(contents: bytes) -> float:
     if not _has_model_inference():
         raise RuntimeError("Model inference is not available.")
@@ -238,9 +327,13 @@ def _predict_video_with_model(contents: bytes) -> float:
         avg_score = sum(scores) / len(scores)
         
         # Blend the top-3 average with the overall average
-        final_score = (0.5 * top_avg) + (0.5 * avg_score)
+        spatial_score = (0.5 * top_avg) + (0.5 * avg_score)
         
-        print(f"[Temporal Aggregation] Frames: {len(frames)} | Failures: {crop_failures} | Top-3 Avg: {top_avg:.3f} | Total Avg: {avg_score:.3f} | Final: {final_score:.3f}")
+        # Add biological signal analysis (rPPG penalty)
+        rppg_penalty = _analyze_rppg(tmp_path)
+        final_score = min(0.95, spatial_score + rppg_penalty)
+        
+        print(f"[Analysis] Frames: {len(frames)} | Failures: {crop_failures} | Spatial: {spatial_score:.3f} | rPPG Penalty: +{rppg_penalty:.3f} | Final: {final_score:.3f}")
         return final_score
     finally:
         if os.path.exists(tmp_path):
