@@ -16,8 +16,6 @@ try:
     from facenet_pytorch import MTCNN
     import timm
     import numpy as np
-    import scipy.signal as signal
-    import moviepy.editor as mp
 except Exception:
     torch = None
     nn = None
@@ -26,6 +24,16 @@ except Exception:
     models = None
     MTCNN = None
     timm = None
+
+try:
+    import scipy.signal as signal
+except Exception:
+    pass
+
+try:
+    import moviepy.editor as mp
+except Exception:
+    pass
 
 try:
     import cv2
@@ -200,7 +208,7 @@ def _sample_video_frames(video_path: str, sample_count: int) -> list:
     return frames
 
 
-def _analyze_frequency_artifacts(pil_img: Image.Image) -> float:
+def _analyze_frequency_artifacts(pil_img) -> float:
     """
     Analyzes the 2D FFT power spectrum for grid-like high-frequency anomalies 
     common in GANs and upsampling algorithms.
