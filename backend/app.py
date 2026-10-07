@@ -61,43 +61,62 @@ model_device: str = "cpu"
 model_error: Optional[str] = None
 
 
+model_ensemble = []
 mtcnn = None
 
 def _try_load_model() -> None:
-    global model, model_device, model_error, mtcnn
+    global model_ensemble, model_device, model_error, mtcnn
     model_error = None
+    model_ensemble = []
 
     if torch is None or Image is None or transforms is None or models is None or MTCNN is None:
         model_error = "PyTorch/Pillow/torchvision/MTCNN not available."
         return
 
-    if not os.path.exists(MODEL_CHECKPOINT_PATH):
-        model_error = f"Model checkpoint not found at {MODEL_CHECKPOINT_PATH}."
-        return
+    model_device = "cuda" if torch.cuda.is_available() else "cpu"
+    mtcnn = MTCNN(margin=40, keep_all=False, select_largest=True, post_process=False, device=model_device)
 
-    try:
-        model_device = "cuda" if torch.cuda.is_available() else "cpu"
-        
-        base_model = timm.create_model('xception', pretrained=False, num_classes=1)
-        # Optional: add dropout if needed to match training structure
-        if hasattr(base_model, 'get_classifier'):
-            base_model.get_classifier().add_module('dropout', nn.Dropout(0.5))
-        
-        loaded = torch.load(MODEL_CHECKPOINT_PATH, map_location=model_device)
-        state_dict = loaded.get("model") if isinstance(loaded, dict) and "model" in loaded else loaded
-        base_model.load_state_dict(state_dict)
-        base_model.eval()
-        
-        model = base_model.to(model_device)
-        mtcnn = MTCNN(margin=40, keep_all=False, select_largest=True, post_process=False, device=model_device)
-    except Exception as exc:
-        model = None
-        mtcnn = None
-        model_error = f"Failed to load model: {exc}"
+    # Attempt to load Xception
+    xception_path = os.getenv("XCEPTION_PATH", "models/deepfake_xception.pt")
+    if os.path.exists(xception_path) and timm is not None:
+        try:
+            xc_model = timm.create_model('xception', pretrained=False, num_classes=1)
+            if hasattr(xc_model, 'get_classifier'):
+                xc_model.get_classifier().add_module('dropout', nn.Dropout(0.5))
+            
+            loaded = torch.load(xception_path, map_location=model_device)
+            state_dict = loaded.get("model") if isinstance(loaded, dict) and "model" in loaded else loaded
+            xc_model.load_state_dict(state_dict)
+            xc_model.eval()
+            model_ensemble.append(xc_model.to(model_device))
+            print("✅ Loaded Xception into ensemble.")
+        except Exception as e:
+            print(f"Failed to load Xception: {e}")
 
+    # Attempt to load EfficientNet
+    effnet_path = os.getenv("EFFNET_PATH", "models/deepfake_model.pt")
+    if os.path.exists(effnet_path):
+        try:
+            eff_model = models.efficientnet_b4(weights=None)
+            num_ftrs = eff_model.classifier[1].in_features
+            eff_model.classifier = nn.Sequential(
+                nn.Dropout(p=0.4, inplace=True),
+                nn.Linear(num_ftrs, 1)
+            )
+            loaded = torch.load(effnet_path, map_location=model_device)
+            state_dict = loaded.get("model") if isinstance(loaded, dict) and "model" in loaded else loaded
+            eff_model.load_state_dict(state_dict)
+            eff_model.eval()
+            model_ensemble.append(eff_model.to(model_device))
+            print("✅ Loaded EfficientNet into ensemble.")
+        except Exception as e:
+            print(f"Failed to load EfficientNet: {e}")
+
+    if not model_ensemble:
+        model_error = "No valid models found to load into ensemble."
 
 def _has_model_inference() -> bool:
-    return model is not None and mtcnn is not None
+    return len(model_ensemble) > 0 and mtcnn is not None
 
 
 def _image_transform() -> "transforms.Compose":
@@ -133,9 +152,14 @@ def _predict_image_with_model(contents: bytes) -> float:
     face_img = transforms.ToPILImage()(face_tensor)
     tensor = _image_transform()(face_img).unsqueeze(0).to(model_device)
 
+    model_scores = []
     with torch.no_grad():
-        output = model(tensor)
-    return _bounded_score(_output_to_fake_probability(output))
+        for m in model_ensemble:
+            output = m(tensor)
+            model_scores.append(_output_to_fake_probability(output))
+            
+    avg_score = sum(model_scores) / len(model_scores)
+    return _bounded_score(avg_score)
 
 
 def _sample_video_frames(video_path: str, sample_count: int) -> list:
@@ -179,21 +203,41 @@ def _predict_video_with_model(contents: bytes) -> float:
     try:
         frames = _sample_video_frames(tmp_path, VIDEO_SAMPLE_FRAMES)
         scores = []
+        crop_failures = 0
+        
         for frame in frames:
             face = mtcnn(frame)
             if face is None:
+                crop_failures += 1
                 continue
             face_tensor = face / 255.0
             face_img = transforms.ToPILImage()(face_tensor)
             tensor = _image_transform()(face_img).unsqueeze(0).to(model_device)
+            
+            frame_model_scores = []
             with torch.no_grad():
-                output = model(tensor)
-            scores.append(_bounded_score(_output_to_fake_probability(output)))
+                for m in model_ensemble:
+                    output = m(tensor)
+                    frame_model_scores.append(_output_to_fake_probability(output))
+            
+            avg_frame_score = sum(frame_model_scores) / len(frame_model_scores)
+            scores.append(_bounded_score(avg_frame_score))
             
         if not scores:
-            raise ValueError("No face detected in any sampled frame.")
+            raise ValueError(f"No face detected in any sampled frame (Crop failures: {crop_failures}/{len(frames)}). Verify MTCNN margin=40 is not clipping out of bounds on close-ups.")
             
-        return sum(scores) / len(scores)
+        # Temporal Aggregation Strategy: 
+        # Deepfake artifacts can be transient (flickering, sudden glitches).
+        # We blend the maximum frame score and the average to ensure transient glitches flag the video.
+        max_score = max(scores)
+        avg_score = sum(scores) / len(scores)
+        
+        # 70% weight to the max frame (if one frame is definitively fake, the video is fake)
+        # 30% weight to the average (retains temporal consistency context)
+        final_score = (0.7 * max_score) + (0.3 * avg_score)
+        
+        print(f"[Temporal Aggregation] Frames: {len(frames)} | Failures: {crop_failures} | Max: {max_score:.3f} | Avg: {avg_score:.3f} | Final: {final_score:.3f}")
+        return final_score
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
